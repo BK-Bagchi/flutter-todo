@@ -1,80 +1,129 @@
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
 
-void main() {
-  runApp(TodoApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final database = openDatabase(
+    join(await getDatabasesPath(), 'todos_database.db'),
+    onCreate: (db, version) {
+      return db.execute(
+        "CREATE TABLE todos(id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, isCompleted INTEGER)",
+      );
+    },
+    version: 1,
+  );
+
+  runApp(TodoApp(database: database));
 }
 
 class Todo {
-  String text;
-  bool isCompleted;
+  final int id;
+  final String text;
+  final bool isCompleted;
 
-  Todo(this.text, this.isCompleted);
+  Todo({
+    required this.id,
+    required this.text,
+    required this.isCompleted,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'text': text,
+      'isCompleted': isCompleted ? 1 : 0,
+    };
+  }
+
+  factory Todo.fromMap(Map<String, dynamic> map) {
+    return Todo(
+      id: map['id'],
+      text: map['text'],
+      isCompleted: map['isCompleted'] == 1,
+    );
+  }
 }
 
 class TodoApp extends StatefulWidget {
+  final Future<Database> database;
+
+  TodoApp({required this.database});
+
   @override
   _TodoAppState createState() => _TodoAppState();
 }
 
 class _TodoAppState extends State<TodoApp> {
-  List<Todo> todos = [];
   TextEditingController _textEditingController = TextEditingController();
+  List<Todo> todos = [];
 
-  void addTodo() {
+  @override
+  void initState() {
+    super.initState();
+    _fetchTodos();
+  }
+
+  Future<void> _fetchTodos() async {
+    final Database db = await widget.database;
+    final List<Map<String, dynamic>> maps = await db.query('todos');
+
+    setState(() {
+      todos = List.generate(maps.length, (i) {
+        return Todo.fromMap(maps[i]);
+      });
+    });
+  }
+
+  Future<void> _addTodo() async {
     final text = _textEditingController.text;
     if (text.isNotEmpty) {
-      setState(() {
-        todos.add(Todo(text, false));
-        _textEditingController.clear();
-      });
+      final Database db = await widget.database;
+      await db.insert(
+        'todos',
+        Todo(
+          id: todos.length +
+              1, // Assign a unique ID, you may need to adjust this logic.
+          text: text,
+          isCompleted: false,
+        ).toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      _textEditingController.clear();
+      _fetchTodos();
     }
   }
 
-  void toggleTodoStatus(int index) {
-    setState(() {
-      todos[index].isCompleted = !todos[index].isCompleted;
-    });
-  }
-
-  void editTodo(int index) {
-    final TextEditingController _editTextController =
-        TextEditingController(text: todos[index].text);
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("Edit Todo"),
-          content: TextField(
-            controller: _editTextController,
-            autofocus: true,
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text("Save"),
-              onPressed: () {
-                setState(() {
-                  todos[index].text = _editTextController.text;
-                  Navigator.of(context).pop();
-                });
-              },
-            ),
-            TextButton(
-              child: Text("Cancel"),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
+  Future<void> _toggleTodoStatus(int id, bool isCompleted) async {
+    final Database db = await widget.database;
+    await db.update(
+      'todos',
+      {'isCompleted': isCompleted ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
     );
+    _fetchTodos();
   }
 
-  void deleteTodo(int index) {
-    setState(() {
-      todos.removeAt(index);
-    });
+  Future<void> _editTodo(int id, String newText) async {
+    final Database db = await widget.database;
+    await db.update(
+      'todos',
+      {'text': newText},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    _fetchTodos();
+  }
+
+  Future<void> _deleteTodo(int id) async {
+    final Database db = await widget.database;
+    await db.delete(
+      'todos',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    _fetchTodos();
   }
 
   @override
@@ -82,7 +131,7 @@ class _TodoAppState extends State<TodoApp> {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Todo App'),
+          title: Text('Todo App with SQFlite'),
         ),
         body: Column(
           children: <Widget>[
@@ -100,7 +149,7 @@ class _TodoAppState extends State<TodoApp> {
                   ),
                   IconButton(
                     icon: Icon(Icons.add),
-                    onPressed: addTodo,
+                    onPressed: _addTodo,
                   ),
                 ],
               ),
@@ -109,11 +158,12 @@ class _TodoAppState extends State<TodoApp> {
               child: ListView.builder(
                 itemCount: todos.length,
                 itemBuilder: (context, index) {
+                  final todo = todos[index];
                   return ListTile(
                     title: Text(
-                      todos[index].text,
+                      todo.text,
                       style: TextStyle(
-                        decoration: todos[index].isCompleted
+                        decoration: todo.isCompleted
                             ? TextDecoration.lineThrough
                             : TextDecoration.none,
                       ),
@@ -123,15 +173,15 @@ class _TodoAppState extends State<TodoApp> {
                       children: <Widget>[
                         IconButton(
                           icon: Icon(Icons.edit),
-                          onPressed: () => editTodo(index),
+                          onPressed: () => _editTodo(todo.id, todo.text),
                         ),
                         IconButton(
                           icon: Icon(Icons.delete),
-                          onPressed: () => deleteTodo(index),
+                          onPressed: () => _deleteTodo(todo.id),
                         ),
                       ],
                     ),
-                    onTap: () => toggleTodoStatus(index),
+                    onTap: () => _toggleTodoStatus(todo.id, !todo.isCompleted),
                   );
                 },
               ),
