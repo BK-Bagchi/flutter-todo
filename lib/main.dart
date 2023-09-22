@@ -77,18 +77,6 @@ class _TodoListScreenState extends State<TodoListScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Enter a new task',
-                    ),
-                    onSubmitted: (taskName) {
-                      if (taskName.trim().isNotEmpty) {
-                        addTodo(taskName);
-                      }
-                    },
-                  ),
-                ),
                 SizedBox(width: 10),
                 ElevatedButton(
                   onPressed: () {
