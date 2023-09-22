@@ -5,122 +5,139 @@ void main() {
 }
 
 class Todo {
-  final String title;
-  bool isDone;
+  String text;
+  bool isCompleted;
 
-  Todo({
-    required this.title,
-    this.isDone = false,
-  });
+  Todo(this.text, this.isCompleted);
 }
 
-class TodoApp extends StatelessWidget {
+class TodoApp extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Todo App',
-      home: TodoListScreen(),
-    );
-  }
+  _TodoAppState createState() => _TodoAppState();
 }
 
-class TodoListScreen extends StatefulWidget {
-  @override
-  _TodoListScreenState createState() => _TodoListScreenState();
-}
-
-class _TodoListScreenState extends State<TodoListScreen> {
+class _TodoAppState extends State<TodoApp> {
   List<Todo> todos = [];
+  TextEditingController _textEditingController = TextEditingController();
 
-  void addTodo(String title) {
-    setState(() {
-      todos.add(Todo(title: title));
-    });
+  void addTodo() {
+    final text = _textEditingController.text;
+    if (text.isNotEmpty) {
+      setState(() {
+        todos.add(Todo(text, false));
+        _textEditingController.clear();
+      });
+    }
   }
 
   void toggleTodoStatus(int index) {
     setState(() {
-      todos[index].isDone = !todos[index].isDone;
+      todos[index].isCompleted = !todos[index].isCompleted;
+    });
+  }
+
+  void editTodo(int index) {
+    final TextEditingController _editTextController =
+        TextEditingController(text: todos[index].text);
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Edit Todo"),
+          content: TextField(
+            controller: _editTextController,
+            autofocus: true,
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Save"),
+              onPressed: () {
+                setState(() {
+                  todos[index].text = _editTextController.text;
+                  Navigator.of(context).pop();
+                });
+              },
+            ),
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void deleteTodo(int index) {
+    setState(() {
+      todos.removeAt(index);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Todo App'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: todos.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(
-                    todos[index].title,
-                    style: TextStyle(
-                      decoration: todos[index].isDone
-                          ? TextDecoration.lineThrough
-                          : TextDecoration.none,
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('Todo App'),
+        ),
+        body: Column(
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      controller: _textEditingController,
+                      decoration: InputDecoration(
+                        hintText: 'Enter a task',
+                      ),
                     ),
                   ),
-                  trailing: Checkbox(
-                    value: todos[index].isDone,
-                    onChanged: (_) => toggleTodoStatus(index),
+                  IconButton(
+                    icon: Icon(Icons.add),
+                    onPressed: addTodo,
                   ),
-                );
-              },
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) {
-                        String newTask = '';
-                        return AlertDialog(
-                          title: Text('Add Task'),
-                          content: TextField(
-                            onChanged: (taskName) {
-                              newTask = taskName;
-                            },
-                            decoration: InputDecoration(
-                              hintText: 'Enter task name',
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pop(context); // Close the dialog
-                              },
-                              child: Text('Cancel'),
-                            ),
-                            ElevatedButton(
-                              onPressed: () {
-                                if (newTask.trim().isNotEmpty) {
-                                  addTodo(newTask);
-                                  Navigator.pop(context); // Close the dialog
-                                }
-                              },
-                              child: Text('Add'),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                  child: Text('Add Task'),
-                ),
-              ],
+            Expanded(
+              child: ListView.builder(
+                itemCount: todos.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    title: Text(
+                      todos[index].text,
+                      style: TextStyle(
+                        decoration: todos[index].isCompleted
+                            ? TextDecoration.lineThrough
+                            : TextDecoration.none,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        IconButton(
+                          icon: Icon(Icons.edit),
+                          onPressed: () => editTodo(index),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete),
+                          onPressed: () => deleteTodo(index),
+                        ),
+                      ],
+                    ),
+                    onTap: () => toggleTodoStatus(index),
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
